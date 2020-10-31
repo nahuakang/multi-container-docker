@@ -1,0 +1,57 @@
+version: '3'
+
+services:
+  postgres:
+    image: 'postgres:latest'
+    environment:
+      - POSTGRES_PASSWORD=postgres_password
+  
+  redis:
+    image: 'redis:latest'
+  
+  nginx:
+    restart: always # Set policy to always as nginx must be ready to go to route traffic to express and react servers
+    depends_on: 
+      - api
+      - client
+    build:
+      dockerfile: Dockerfile.dev
+      context: ./nginx
+    ports:
+      - '3050:80' # 80 is defined in nginx container
+  
+  api: # corresponds to upstream api in ./nginx/default.conf
+    build:
+      dockerfile: Dockerfile.dev
+      context: ./server
+    volumes:
+      - /app/node_modules # bookmarked not to be overwritten
+      - ./server:/app # * in ./server be shared with container
+    environment: # see ./server/keys.js
+      - REDIS_HOST=redis # redis refers to the service redis
+      - REDIS_PORT=6379
+      - PGUSER=postgres
+      - PGHOST=postgres
+      - PGDATABASE=postgres
+      - PGPASSWORD=postgres_password
+      - PGPORT=5432
+  
+  client:
+    stdin_open: true # docker run -i
+    build:
+      dockerfile: Dockerfile.dev
+      context: ./client
+    volumes:
+      - /app/node_modules
+      - ./client:/app
+  
+  worker:
+    build:
+      dockerfile: Dockerfile.dev
+      context: ./worker
+    volumes:
+      - /app/node_modules # bookmarked not to be overwritten
+      - ./worker:/app # * in ./worker be shared with container
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
